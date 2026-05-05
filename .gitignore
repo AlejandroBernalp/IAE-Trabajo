@@ -1,0 +1,20 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info/
+
+# Virtual environments (Añadimos la barra /)
+.venv/
+venv/
+env/
+
+# Archivos de IA y Datos (Evita subir archivos gigantes)
+*.csv
+*.pkl
+*.h5
+*.pth
+*.ipynb_checkpoints/
+data/   
