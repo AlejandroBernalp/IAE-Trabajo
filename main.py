@@ -1,140 +1,70 @@
-from ucimlrepo import fetch_ucirepo 
+import pandas as pd
 
-def load_credit_data(): 
-    # fetch dataset 
-    statlog_german_credit_data = fetch_ucirepo(id=144) 
-    return statlog_german_credit_data
+# Importar el archivo generado en R
+df = pd.read_csv("german_credit_clean.csv")
 
+# Verificar que los nombres y valores están correctos
+print(df.head())
+print(df.info())
 
-statlog_german_credit_data = load_credit_data()
+# Convertir todas las columnas de tipo objeto/str a categóricas
+df = df.astype({col: 'category' for col in df.select_dtypes(['object', 'string']).columns})
 
+# La columna 'class' suele ser el objetivo (1=bueno, 2=malo), 
+# así que también conviene que sea categórica
+df['class'] = df['class'].astype('category')
 
-# data (as pandas dataframes) 
-X = statlog_german_credit_data.data.features 
-y = statlog_german_credit_data.data.targets 
-    
-# print(statlog_german_credit_data.variables.loc[:,['name','description']]) 
-# Le cambiamos el nombre a las variables para que 
-# tengan un nombre más fácilmente interpretable
-print(X.head())
-new_column_names = {
-    'Attribute1': 'checking_status',
-    'Attribute2': 'duration_months',
-    'Attribute3': 'credit_history',
-    'Attribute4': 'purpose',
-    'Attribute5': 'credit_amount',
-    'Attribute6': 'savings_status',
-    'Attribute7': 'employment_since',
-    'Attribute8': 'installment_rate',
-    'Attribute9': 'personal_status',
-    'Attribute10': 'other_debtors',
-    'Attribute11': 'residence_since',
-    'Attribute12': 'property_type',
-    'Attribute13': 'age',
-    'Attribute14': 'installment_plans',
-    'Attribute15': 'housing_type',
-    'Attribute16': 'existing_credits',
-    'Attribute17': 'job_type',
-    'Attribute18': 'dependents',
-    'Attribute19': 'telephone',
-    'Attribute20': 'foreign_worker'
-}
+# Verificar el resultado final
+print(df.info())
 
-X.rename(columns=new_column_names, inplace=True)
+# Hay que cambiar el encoding de las variables categóricas para modelos que no entienden bien 
+# Vamos a aplicar One Hot Encoding y Ordinal Encoding a las variables que tenga sentido. 
 
-print(X.head())
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
+import pandas as pd
 
-#Ahora cambiamos los valores de las variables cualitativas 
-#por nombres que tengan sentido, en vez de A11, A311, etc.
-# haciendo uso de la guía en la página web.
+# 1. Listas de columnas según su tratamiento
+# He movido credit_history a nominal_cols porque el error venía de ahí
+nominal_cols = [
+    'credit_history', 'purpose', 'personal_status', 
+    'other_debtors', 'property_type', 'installment_plans', 'housing_type'
+]
 
-category_mappings = {
-    'checking_status': {
-        'A11': '< 0 DM',
-        'A12': '0-200 DM',
-        'A13': '>= 200 DM',
-        'A14': 'no checking'
-    },
-    'credit_history': {
-        'A30': 'all paid duly',
-        'A31': 'all paid duly (this bank)',
-        'A32': 'existing paid duly',
-        'A33': 'past delay',
-        'A34': 'critical account'
-    },
-    'purpose': {
-        'A40': 'car (new)',
-        'A41': 'car (used)',
-        'A42': 'furniture/equipment',
-        'A43': 'radio/television',
-        'A44': 'domestic appliances',
-        'A45': 'repairs',
-        'A46': 'education',
-        'A47': 'vacation',
-        'A48': 'retraining',
-        'A49': 'business',
-        'A410': 'others'
-    },
-    'savings_status': {
-        'A61': '< 100 DM',
-        'A62': '100-500 DM',
-        'A63': '500-1000 DM',
-        'A64': '>= 1000 DM',
-        'A65': 'no savings'
-    },
-    'employment_since': {
-        'A71': 'unemployed',
-        'A72': '< 1 year',
-        'A73': '1-4 years',
-        'A74': '4-7 years',
-        'A75': '>= 7 years'
-    },
-    'personal_status': {
-        'A91': 'male: divorced/separated',
-        'A92': 'female: divorced/sep/married',
-        'A93': 'male: single',
-        'A94': 'male: married/widowed',
-        'A95': 'female: single'
-    },
-    'other_debtors': {
-        'A101': 'none',
-        'A102': 'co-applicant',
-        'A103': 'guarantor'
-    },
-    'property_type': {
-        'A121': 'real estate',
-        'A122': 'life insurance',
-        'A123': 'car/other',
-        'A124': 'no property'
-    },
-    'installment_plans': {
-        'A141': 'bank',
-        'A142': 'stores',
-        'A143': 'none'
-    },
-    'housing_type': {
-        'A151': 'rent',
-        'A152': 'own',
-        'A153': 'for free'
-    },
-    'job_type': {
-        'A171': 'unskilled non-resident',
-        'A172': 'unskilled resident',
-        'A173': 'skilled official',
-        'A174': 'management/highly qualified'
-    },
-    'telephone': {
-        'A191': 'none',
-        'A192': 'yes'
-    },
-    'foreign_worker': {
-        'A201': 'yes',
-        'A202': 'no'
-    }
-}
+ordinal_cols = ['checking_status', 'savings_status', 'employment_since', 'job_type']
 
-# Aplicar el cambio a todo el DataFrame de una vez
-X.replace(category_mappings, inplace=True)
+binary_cols = ['telephone', 'foreign_worker']
 
-print(X.head())
+# 2. Definir los órdenes para las ordinales (basado exactamente en la descripción UCI)
+# IMPORTANTE: Los nombres deben coincidir EXACTAMENTE con lo que hay en el DF
+ordinal_order = [
+    ['no checking', '< 0 DM', '0-200 DM', '>= 200 DM'], # checking_status
+    ['no savings', '< 100 DM', '100-500 DM', '500-1000 DM', '>= 1000 DM'], # savings_status
+    ['unemployed', '< 1 year', '1-4 years', '4-7 years', '>= 7 years'], # employment_since
+    ['unskilled non-res', 'unskilled res', 'skilled official', 'mgmt/highly qualif'] # job_type CORREGIDO
+]
+
+# 3. Construir el transformador
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('ord', OrdinalEncoder(categories=ordinal_order), ordinal_cols),
+        ('nom', OneHotEncoder(drop='first', sparse_output=False), nominal_cols),
+        ('bin', OrdinalEncoder(), binary_cols)
+    ],
+    remainder='passthrough'
+)
+
+# 4. Transformar y reconstruir el DataFrame
+X = df.drop(columns=['class']) # Suponiendo que 'class' es tu target
+X_processed = preprocessor.fit_transform(X)
+
+# Recuperar nombres de columnas
+cols_names = preprocessor.get_feature_names_out()
+
+# Crear el DF final y forzar tipos numéricos
+df_final = pd.DataFrame(X_processed, columns=cols_names)
+df_final = df_final.apply(pd.to_numeric)
+
+print("¡Éxito! Todas las variables son numéricas ahora.")
+print(df_final.info())
 
