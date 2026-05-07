@@ -12,6 +12,7 @@ venv/
 env/
 
 # Archivos de IA y Datos (Evita subir archivos gigantes)
+*.png
 *.csv
 *.pkl
 *.h5

@@ -22,7 +22,6 @@ print(df.info())
 
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder
-import pandas as pd
 
 # 1. Listas de columnas según su tratamiento
 # He movido credit_history a nominal_cols porque el error venía de ahí
@@ -193,3 +192,198 @@ print("--- REPORTE XGBOOST ---")
 print(classification_report(y_test, y_pred_xgb))
 print("Matriz de Confusión XGBoost:")
 print(confusion_matrix(y_test, y_pred_xgb))
+
+# Si bien se ve que los modelos de regresión logística y svm
+# tuvieron un mejor recall (menos morosos a los que se les da un crédito)
+# vamos a aplicar validación cruzada a estos dos modelos para confirmar que no
+# ha habido sesgo por la partición de train/test.
+
+from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.metrics import make_scorer, confusion_matrix
+from sklearn.pipeline import Pipeline
+
+# --- 1. DEFINICIÓN DE LA MÉTRICA DE COSTE PERSONALIZADA ---
+def calcular_coste_financiero(y_true, y_pred):
+    cm = confusion_matrix(y_true, y_pred)
+    if cm.shape == (2, 2):
+        fp = cm[0, 1]  # Cliente bueno clasificado como malo (Coste 1)
+        fn = cm[1, 0]  # Cliente malo clasificado como bueno (Coste 5)
+        return (fp * 1) + (fn * 5)
+    return 9999  # Penalización en caso de error de matriz
+
+# Creamos el scorer para la validación cruzada
+cost_scorer = make_scorer(calcular_coste_financiero, greater_is_better=False)
+
+# --- 2. CONFIGURACIÓN DE MODELOS CON PIPELINES ---
+# Definimos los modelos con sus pesos de coste (donde sea posible)
+# Nota: La Red Neuronal se excluye aquí por no soportar class_weight directamente,
+# pero se podría añadir con técnicas de remuestreo si lo necesitas.
+
+modelos = {
+    "Logística": LogisticRegression(class_weight={0: 1, 1: 5}, random_state=42),
+    "SVM Linear": SVC(kernel='linear', class_weight={0: 1, 1: 5}, random_state=42),
+    "Random Forest": RandomForestClassifier(n_estimators=100, class_weight={0: 1, 1: 5}, random_state=42),
+    "XGBoost": XGBClassifier(random_state=42)
+}
+
+# --- 3. VALIDACIÓN CRUZADA ESTRATIFICADA ---
+skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+
+print(f"{'Modelo':<20} | {'Coste Medio':<15} | {'Desviación':<10}")
+print("-" * 50)
+
+resultados_finales = {}
+
+for nombre, modelo in modelos.items():
+    # Creamos el Pipeline: Primero escala, luego aplica el modelo
+    # Esto evita el Data Leakage
+    pipeline = Pipeline([
+        ('scaler', StandardScaler()),
+        ('clf', modelo)
+    ])
+    
+    # Si es XGBoost, necesitamos manejar los pesos de forma distinta en el fit,
+    # pero para simplificar la comparación en CV, usamos el pipeline estándar.
+    # Nota: Para XGBoost en Pipeline, los pesos se suelen pasar vía fit_params, 
+    # pero aquí lo ejecutamos directo para ver su rendimiento base.
+    
+    scores = cross_val_score(pipeline, df_final, y, cv=skf, scoring=cost_scorer)
+    
+    # Convertimos a positivo porque cost_scorer devuelve valores negativos
+    coste_medio = -scores.mean()
+    desviacion = scores.std()
+    
+    resultados_finales[nombre] = coste_medio
+    print(f"{nombre:<20} | {coste_medio:<15.2f} | {desviacion:<10.2f}")
+
+# --- 4. SELECCIÓN DEL GANADOR ---
+mejor_modelo = min(resultados_finales, key=resultados_finales.get)
+print("-" * 50)
+print(f"El modelo recomendado para el banco es: {mejor_modelo}")
+
+# GRÁFICO COMPARATIVO 
+import matplotlib.pyplot as plt
+from sklearn.model_selection import cross_validate
+import seaborn as sns
+
+
+# 1. Ejecutamos la validación cruzada con las TRES métricas
+metrics = {
+    'accuracy': 'accuracy',
+    'recall': 'recall',
+    'f1': 'f1'
+}
+
+results_viz = {}
+
+for nombre, modelo in modelos.items():
+    pipeline = Pipeline([
+        ('scaler', StandardScaler()),
+        ('clf', modelo)
+    ])
+    
+    cv_results = cross_validate(pipeline, df_final, y, cv=skf, scoring=metrics)
+    results_viz[nombre] = {
+        'Accuracy': cv_results['test_accuracy'].mean(),
+        'Recall': cv_results['test_recall'].mean(),
+        'F1-Score': cv_results['test_f1'].mean()
+    }
+
+# 2. Reestructuramos los datos para Seaborn
+df_plot = []
+for modelo, metricas in results_viz.items():
+    for metrica, valor in metricas.items():
+        df_plot.append({'Modelo': modelo, 'Métrica': metrica, 'Valor': valor})
+
+df_plot = pd.DataFrame(df_plot)
+
+# 3. Gráfico "Premium" con 3 métricas
+plt.figure(figsize=(14, 8))
+sns.set_theme(style="whitegrid")
+
+# Paleta de colores: Azul (Acc), Rojo (Recall), y un Dorado/Naranja para el F1-Score
+palette = {
+    "Accuracy": "#7FB3D5", 
+    "Recall": "#E74C3C", 
+    "F1-Score": "#F39C12"
+}
+
+ax = sns.barplot(data=df_plot, x='Modelo', y='Valor', hue='Métrica', palette=palette, edgecolor='0.3')
+
+# Personalización
+plt.title('Evaluación Multicriterio: Balance entre Acierto, Riesgo y F1-Score', fontsize=16, fontweight='bold', pad=25)
+plt.xlabel('Algoritmos de Clasificación', fontsize=12, fontweight='bold')
+plt.ylabel('Puntuación (Escala 0-1)', fontsize=12, fontweight='bold')
+plt.ylim(0, 1.1)
+plt.legend(title='Métricas de Evaluación', bbox_to_anchor=(1.02, 1), loc='upper left', borderaxespad=0.)
+
+# Añadir los números sobre las barras
+for p in ax.patches:
+    if p.get_height() > 0:
+        ax.annotate(f'{p.get_height():.2f}', 
+                    (p.get_x() + p.get_width() / 2., p.get_height()), 
+                    ha = 'center', va = 'center', 
+                    xytext = (0, 9), 
+                    textcoords = 'offset points',
+                    fontsize=10, fontweight='bold')
+
+sns.despine()
+plt.tight_layout()
+plt.show()
+
+# Importancia de las variables
+import numpy as np
+
+# 1. Entrenamos el modelo final con todo el dataset para obtener los coeficientes definitivos
+# Usamos el Pipeline para asegurar que los coeficientes correspondan a los datos escalados
+final_pipeline = Pipeline([
+    ('scaler', StandardScaler()),
+    ('clf', SVC(kernel='linear', class_weight={0: 1, 1: 5}, random_state=42))
+])
+final_pipeline.fit(df_final, y)
+
+# 2. Extraer coeficientes y nombres de las columnas
+model_step = final_pipeline.named_steps['clf']
+feature_names = df_final.columns
+coefficients = model_step.coef_.flatten()
+
+# 3. Crear un DataFrame para facilitar la visualización
+importance_df = pd.DataFrame({
+    'Feature': feature_names,
+    'Coefficient': coefficients
+})
+
+# Calculamos el valor absoluto para ver la "fuerza" total, pero mantendremos el signo para el gráfico
+importance_df['Abs_Coefficient'] = importance_df['Coefficient'].abs()
+importance_df = importance_df.sort_values(by='Abs_Coefficient', ascending=False).head(15)
+
+# ... (mismo código de preparación del dataframe)
+
+plt.figure(figsize=(12, 8))
+# Definimos los colores para pasarlos como un diccionario (que es lo que pide ahora Seaborn)
+palette_dict = {row['Feature']: ('#E74C3C' if row['Coefficient'] > 0 else '#3498db') 
+                for _, row in importance_df.iterrows()}
+
+# Aplicamos los cambios sugeridos: y=hue y legend=False
+ax = sns.barplot(
+    data=importance_df, 
+    x='Coefficient', 
+    y='Feature', 
+    hue='Feature',      # Asignamos la variable al hue
+    palette=palette_dict, 
+    legend=False,        # Desactivamos la leyenda automática de hue
+    edgecolor='0.3'
+)
+
+plt.title('Top 15 Variables Determinantes (SVM Linear)', fontsize=16, fontweight='bold')
+plt.xlabel('Peso del Coeficiente (Impacto en el Riesgo)', fontsize=12)
+plt.ylabel('Variables del Cliente', fontsize=12)
+plt.axvline(0, color='black', lw=1)
+
+# Notas explicativas
+plt.annotate('Aumenta Riesgo (Moroso)', xy=(0.2, 14.5), color='#E74C3C', fontweight='bold')
+plt.annotate('Reduce Riesgo (Solvente)', xy=(-0.45, 14.5), color='#3498db', fontweight='bold')
+
+sns.despine()
+plt.tight_layout()
+plt.show()
