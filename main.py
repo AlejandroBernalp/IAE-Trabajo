@@ -70,33 +70,40 @@ if __name__ == "__main__":
 
     config_modelos = {
         "Logística": {
-            "model": LogisticRegression(class_weight={0: 1, 1: 5}, random_state=42, max_iter=1000),
+            "model": LogisticRegression(class_weight={0: 1, 1: 5}, random_state=42, max_iter=2000),
             "params": {
-                "clf__C": [0.01, 0.1, 1, 10]
+                # Exploramos penalizaciones mucho más finas y extremas
+                "clf__C": [0.001, 0.01, 0.05, 0.1, 0.5, 1, 10, 50]
             }
         },
         "SVM": {
             "model": SVC(class_weight={0: 1, 1: 5}, random_state=42),
             "params": {
-                "clf__C": [0.1, 1, 10],
-                "clf__kernel": ['linear', 'rbf']
+                # Añadimos más granularidad a C y el parámetro gamma para el kernel RBF
+                "clf__C": [0.01, 0.1, 1, 5, 10, 50],
+                "clf__kernel": ['linear', 'rbf'],
+                "clf__gamma": ['scale', 'auto', 0.01, 0.1]
             }
         },
         "Random Forest": {
             "model": RandomForestClassifier(class_weight={0: 1, 1: 5}, random_state=42),
             "params": {
-                "clf__n_estimators": [100, 200],
-                "clf__max_depth": [5, 10, None],
-                "clf__min_samples_leaf": [1, 2, 4]
+                # Mantenemos tu lista e incrementamos combinaciones de árboles
+                "clf__n_estimators": [100, 200, 400],
+                "clf__max_depth": [4, 6, 8, 12, None],
+                "clf__min_samples_leaf": [5, 10, 15, 20],
+                "clf__criterion": ["gini", "entropy"] # Evaluamos dos formas de medir la pureza
             }
         },
         "XGBoost": {
             "model": XGBClassifier(random_state=42, eval_metric='logloss'),
             "params": {
-                "clf__learning_rate": [0.05, 0.1],
-                "clf__max_depth": [3, 5],
-                "clf__n_estimators": [100, 200],
-                "clf__scale_pos_weight": [5] # Penalización financiera nativa en XGBoost
+                # Añadimos más variedad en la velocidad de aprendizaje y submuestreo
+                "clf__learning_rate": [0.01, 0.05, 0.1, 0.2],
+                "clf__max_depth": [3, 4, 6, 8],
+                "clf__n_estimators": [100, 200, 300],
+                "clf__subsample": [0.8, 1.0], # Porcentaje de filas usadas por árbol
+                "clf__scale_pos_weight": [5]
             }
         }
     }
