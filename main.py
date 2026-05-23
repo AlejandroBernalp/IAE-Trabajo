@@ -1,7 +1,11 @@
 import pandas as pd
+from datos import cargar_datos_desde_r
 
-# Importar el archivo generado en R
-df = pd.read_csv("german_credit_clean.csv")
+if __name__ == "__main__":
+    print("--- INICIANDO PIPELINE DE MACHINE LEARNING ---")
+    
+    # Traemos los datos directamente a Python usando el motor de R que acabamos de arreglar
+    df = cargar_datos_desde_r()
 
 # Verificar que los nombres y valores están correctos
 print(df.head())
