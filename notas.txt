@@ -1,0 +1,4 @@
+Poner comparación dask-pandas
+Usar rpy2 para q python ejecute R.
+packages.txt con las cosas de R para que streamlit funcione con lo anterior
+Hacer grids de hiperparámetros para analizar en profundidad los modelos (min_samples_leaf de 10, 15, ...). Se podría hacer con dask
