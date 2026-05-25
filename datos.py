@@ -147,7 +147,7 @@ def cargar_datos_desde_r():
           TRUE ~ housing_type
         ),
         job_type = case_when(
-          job_type == "A171" ~ "unemployed non-res",
+          job_type == "A171" ~ "unskilled non-res"
           job_type == "A172" ~ "unskilled res",
           job_type == "A173" ~ "skilled official",
           job_type == "A174" ~ "mgmt/highly qualif",
