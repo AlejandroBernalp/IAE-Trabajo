@@ -29,6 +29,7 @@ dependencies = [
     "seaborn>=0.13.2",
     "setuptools<82",
     "siuba>=0.4.2",
+    "streamlit>=1.57.0",
     "ucimlrepo>=0.0.7",
     "xgboost>=3.2.0",
 ]

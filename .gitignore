@@ -16,7 +16,6 @@ env/
 *.csv
 *.pkl
 *.h5
-*.txt
 *.pth
 *.ipynb_checkpoints/
 data/   
