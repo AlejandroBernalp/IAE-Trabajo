@@ -36,25 +36,22 @@ def cargar_datos_desde_r():
     print(f"[ETL] Motor de R detectado en: {r_binary}")
     
     codigo_r = """
-    # 1. FORZAR MÉTODO DE DESCARGA SEGURO PARA EVITAR 'SSL CONNECT ERROR' EN WINDOWS
-    options(download.file.method = "wininet", keep.source = TRUE, show.error.messages = TRUE)
+    # Desactivar alertas de instalación y forzar codificación nativa UTF-8
+    options(warn = -1, encoding = "UTF-8", download.file.method = "wininet")
     
-    if (!require("dplyr", quietly = TRUE)) {
-        install.packages("dplyr", repos="http://cran.us.r-project.org", quiet = TRUE)
-        library(dplyr)
-    }
+    # Carga silenciosa de la librería preinstalada por el sistema operativo
+    suppressPackageStartupMessages(library(dplyr))
     
-    # Usamos la URL oficial
+    # URL oficial del dataset
     url <- "https://archive.ics.uci.edu/ml/machine-learning-databases/statlog/german/german.data"
     
-    # Forzamos la descarga usando el canal nativo de internet de Windows
+    # Extracción segura con control de errores por si falla el protocolo HTTPS
     X <- tryCatch({
-        read.table(url, header = FALSE, sep = " ")
+        read.table(url, header = FALSE, sep = " ", stringsAsFactors = FALSE)
     }, error = function(e) {
-        # Si aun así fallara el https por políticas restrictivas, intentamos el fallback por http ordinario
         tryCatch({
             url_http <- "http://archive.ics.uci.edu/ml/machine-learning-databases/statlog/german/german.data"
-            read.table(url_http, header = FALSE, sep = " ")
+            read.table(url_http, header = FALSE, sep = " ", stringsAsFactors = FALSE)
         }, error = function(e2) {
             stop(paste("Error de conexión en R. Revisa tu antivirus/firewall:", e2$message))
         })
@@ -69,22 +66,107 @@ def cargar_datos_desde_r():
     )
     names(X) <- nuevos_nombres
     
+    # Transformaciones estructuradas con case_when para evitar mensajes de advertencia
     X <- X %>% mutate(
-        checking_status = recode(checking_status, "A11" = "< 0 DM", "A12" = "0-200 DM", "A13" = ">= 200 DM", "A14" = "no checking"),
-        credit_history = recode(credit_history, "A30" = "all paid duly", "A31" = "all paid bank", "A32" = "existing paid", "A33" = "past delay", "A34" = "critical account"),
-        purpose = recode(purpose, "A40" = "car (new)", "A41" = "car (used)", "A42" = "furniture/equipment", "A43" = "radio/television", "A44" = "domestic appliances", "A45" = "repairs", "A46" = "education", "A47" = "vacation", "A48" = "retraining", "A49" = "business", "A410" = "others"),
-        savings_status = recode(savings_status, "A61" = "< 100 DM", "A62" = "100-500 DM", "A63" = "500-1000 DM", "A64" = ">= 1000 DM", "A65" = "no savings"),
-        employment_since = recode(employment_since, "A71" = "unemployed", "A72" = "< 1 year", "A73" = "1-4 years", "A74" = "4-7 years", "A75" = ">= 7 years"),
-        personal_status = recode(personal_status, "A91" = "male: divorced/sep", "A92" = "female: div/sep/mar", "A93" = "male: single", "A94" = "male: mar/wid", "A95" = "female: single"),
-        other_debtors = recode(other_debtors, "A101" = "none", "A102" = "co-applicant", "A103" = "guarantor"),
-        property_type = recode(property_type, "A121" = "real estate", "A122" = "life insurance", "A123" = "car/other", "A124" = "no property"),
-        installment_plans = recode(installment_plans, "A141" = "bank", "A142" = "stores", "A143" = "none"),
-        housing_type = recode(housing_type, "A151" = "rent", "A152" = "own", "A153" = "for free"),
-        job_type = recode(job_type, "A171" = "unskilled non-res", "A172" = "unskilled res", "A173" = "skilled official", "A174" = "mgmt/highly qualif"),
-        telephone = recode(telephone, "A191" = "none", "A192" = "yes"),
-        foreign_worker = recode(foreign_worker, "A201" = "yes", "A202" = "no")
+        checking_status = case_when(
+          checking_status == "A11" ~ "< 0 DM",
+          checking_status == "A12" ~ "0-200 DM",
+          checking_status == "A13" ~ ">= 200 DM",
+          checking_status == "A14" ~ "no checking",
+          TRUE ~ checking_status
+        ),
+        credit_history = case_when(
+          credit_history == "A30" ~ "no credits",
+          credit_history == "A31" ~ "all paid duly",
+          credit_history == "A32" ~ "existing paid",
+          credit_history == "A33" ~ "past delay",
+          credit_history == "A34" ~ "critical account",
+          TRUE ~ credit_history
+        ),
+        purpose = case_when(
+          purpose == "A40" ~ "car (new)",
+          purpose == "A41" ~ "car (used)",
+          purpose == "A42" ~ "furniture/equipment",
+          purpose == "A43" ~ "radio/television",
+          purpose == "A44" ~ "domestic appliances",
+          purpose == "A45" ~ "repairs",
+          purpose == "A46" ~ "education",
+          purpose == "A47" ~ "vacation",
+          purpose == "A48" ~ "retraining",
+          purpose == "A49" ~ "business",
+          purpose == "A410" ~ "others",
+          TRUE ~ purpose
+        ),
+        savings_status = case_when(
+          savings_status == "A61" ~ "< 100 DM",
+          savings_status == "A62" ~ "100-500 DM",
+          savings_status == "A63" ~ "500-1000 DM",
+          savings_status == "A64" ~ ">= 1000 DM",
+          savings_status == "A65" ~ "no savings",
+          TRUE ~ savings_status
+        ),
+        employment_since = case_when(
+          employment_since == "A71" ~ "unemployed",
+          employment_since == "A72" ~ "< 1 year",
+          employment_since == "A73" ~ "1-4 years",
+          employment_since == "A74" ~ "4-7 years",
+          employment_since == "A75" ~ ">= 7 years",
+          TRUE ~ employment_since
+        ),
+        personal_status = case_when(
+          personal_status == "A91" ~ "male: divorced/sep",
+          personal_status == "A92" ~ "female: div/sep/mar",
+          personal_status == "A93" ~ "male: single",
+          personal_status == "A94" ~ "male: mar/wid",
+          personal_status == "A95" ~ "female: single",
+          TRUE ~ personal_status
+        ),
+        other_debtors = case_when(
+          other_debtors == "A101" ~ "none",
+          other_debtors == "A102" ~ "co-applicant",
+          other_debtors == "A103" ~ "guarantor",
+          TRUE ~ other_debtors
+        ),
+        property_type = case_when(
+          property_type == "A121" ~ "real estate",
+          property_type == "A122" ~ "life insurance",
+          property_type == "A123" ~ "car/other",
+          property_type == "A124" ~ "no property",
+          TRUE ~ property_type
+        ),
+        installment_plans = case_when(
+          installment_plans == "A141" ~ "bank",
+          installment_plans == "A142" ~ "stores",
+          installment_plans == "A143" ~ "none",
+          TRUE ~ installment_plans
+        ),
+        housing_type = case_when(
+          housing_type == "A151" ~ "rent",
+          housing_type == "A152" ~ "own",
+          housing_type == "A153" ~ "for free",
+          TRUE ~ housing_type
+        ),
+        job_type = case_when(
+          job_type == "A171" ~ "unemployed non-res",
+          job_type == "A172" ~ "unskilled res",
+          job_type == "A173" ~ "skilled official",
+          job_type == "A174" ~ "mgmt/highly qualif",
+          TRUE ~ job_type
+        ),
+        telephone = case_when(
+          telephone == "A191" ~ "none",
+          telephone == "A192" ~ "yes",
+          TRUE ~ telephone
+        ),
+        foreign_worker = case_when(
+          foreign_worker == "A201" ~ "yes",
+          foreign_worker == "A202" ~ "no",
+          TRUE ~ foreign_worker
+        )
     )
-    write.csv(X, stdout(), row.names = FALSE)
+    
+    # Exportar los datos procesados directamente a la salida estándar en formato CSV
+    write.csv(X, stdout(), row.names = FALSE, quote = TRUE)
     """
     
     temp_script = "temp_etl_script.R"
@@ -110,7 +192,7 @@ def cargar_datos_desde_r():
         print("[ETL] Transfiriendo flujo de datos a Pandas...")
         df_pandas = pd.read_csv(io.StringIO(proceso.stdout))
         
-        # Corrección del Warning: Incluimos tanto 'object' como 'string' de forma explícita
+        # Tipado de columnas para asegurar compatibilidad con el pipeline de entrenamiento
         columnas_texto = df_pandas.select_dtypes(include=['object', 'string']).columns
         df_pandas[columnas_texto] = df_pandas[columnas_texto].astype('category')
         df_pandas['class'] = df_pandas['class'].astype('category')
