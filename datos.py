@@ -8,15 +8,30 @@ import pandas as pd
 def cargar_datos_desde_r():
     """
     Versión portátil optimizada para solucionar el error de SSL Connect en Windows.
+    Incluye búsqueda dinámica del motor de R para entornos colaborativos y Streamlit.
     """
     print("[ETL] Buscando el motor de R en el sistema...")
+    
+    # 1. Intentar buscar Rscript en las variables de entorno (PATH) - Vital para Linux/Streamlit Cloud
     r_binary = shutil.which("Rscript")
     
-    if not r_binary:
-        if sys.platform.startswith("win"):
-            r_binary = r"C:\Program Files\R\R-4.3.1\bin\x64\Rscript.exe"
-        else:
-            raise FileNotFoundError("No se encontró 'Rscript'.")
+    # 2. Si no se encuentra en el PATH y es Windows, buscar dinámicamente en Archivos de Programa
+    if not r_binary and sys.platform.startswith("win"):
+        base_path = r"C:\Program Files\R"
+        if os.path.exists(base_path):
+            # Listar subcarpetas que empiecen por "R-" (ej: R-4.3.1, R-4.4.0)
+            versiones = [f for f in os.listdir(base_path) if f.startswith("R-")]
+            if versiones:
+                # Ordenar para seleccionar la versión más reciente instalada en el equipo
+                version_reciente = sorted(versiones)[-1]
+                r_binary = os.path.join(base_path, version_reciente, "bin", "x64", "Rscript.exe")
+    
+    # 3. Control de seguridad definitivo si no se localiza por ninguna vía
+    if not r_binary or not os.path.exists(r_binary if not shutil.which("Rscript") else r_binary):
+        raise FileNotFoundError(
+            "❌ No se ha podido localizar 'Rscript' automáticamente en el sistema.\n"
+            "Asegúrese de que R esté instalado o de añadirlo a las variables de entorno (PATH)."
+        )
             
     print(f"[ETL] Motor de R detectado en: {r_binary}")
     
