@@ -89,7 +89,7 @@ greenlet==3.5.1
     # via sqlalchemy
 h11==0.16.0
     # via uvicorn
-h5py
+h5py==3.16.0
     # via tf (pyproject.toml)
 httptools==0.7.1
     # via streamlit
@@ -422,5 +422,3 @@ xgboost==3.2.0
     # via tf (pyproject.toml)
 zict==3.0.0
     # via distributed
-tensorflow>=2.15.0
-scikeras>=0.13.0

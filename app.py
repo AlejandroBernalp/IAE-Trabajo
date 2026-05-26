@@ -12,11 +12,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn.metrics import confusion_matrix, classification_report, make_scorer
 from xgboost import XGBClassifier
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, Dropout, BatchNormalization
-from tensorflow.keras.optimizers import Adam
-from scikeras.wrappers import KerasClassifier
+import io
 
 # Importación del módulo de datos local (Extractor Crudo)
 from datos import cargar_datos_desde_r
@@ -83,28 +79,6 @@ def calcular_coste_financiero(y_true, y_pred):
         return (fp * 1) + (fn * 5)
     return 9999
 
-def crear_red_neuronal(input_dim=1, learning_rate=0.001, neurons=64, dropout_rate=0.2):
-    model = Sequential([
-        # Capa de entrada y primera capa oculta
-        Dense(neurons, activation='relu', input_shape=(input_dim,)),
-        BatchNormalization(),
-        Dropout(dropout_rate),
-        
-        # Segunda capa oculta
-        Dense(neurons // 2, activation='relu'),
-        BatchNormalization(),
-        Dropout(dropout_rate),
-        
-        # Capa de salida (Sigmoide para clasificación binaria)
-        Dense(1, activation='sigmoid')
-    ])
-    
-    model.compile(
-        optimizer=Adam(learning_rate=learning_rate),
-        loss='binary_crossentropy',
-        metrics=['accuracy']
-    )
-    return model
 # ==========================================
 # MOTOR CENTRAL DE CARGA E INGENIERÍA DE DATOS
 # ==========================================
@@ -199,7 +173,7 @@ elif opcion_menu == "Entrenamiento del Modelo":
     # SI NO SE HA ENTRENADO AÚN: Mostrar el botón de inicio
     if not st.session_state['entrenamiento_realizado']:
         if st.button("🚀 Iniciar Entrenamiento (GridSearch)"):
-            with st.spinner("Entrenando macro-malla ampliada de algoritmos (incluyendo Red Neuronal Deep Learning). Este proceso puede tardar unos minutos..."):
+            with st.spinner("Entrenando macro-malla de algoritmos. Este proceso puede tardar unos minutos..."):
                 
                 nominal_cols = ['credit_history', 'purpose', 'personal_status', 'other_debtors', 'property_type', 'installment_plans', 'housing_type']
                 ordinal_cols = ['checking_status', 'savings_status', 'employment_since', 'job_type']
@@ -231,25 +205,8 @@ elif opcion_menu == "Entrenamiento del Modelo":
                 X_train, X_test, y_train, y_test = train_test_split(df_final, y, test_size=0.2, random_state=42, stratify=y)
                 cost_scorer = make_scorer(calcular_coste_financiero, greater_is_better=False)
 
-                # Averiguamos la dimensión exacta de entrada después del OneHotEncoder
-                num_features = df_final.shape[1]
-
                 from sklearn.pipeline import Pipeline
                 
-                # Instanciamos el wrapper de Keras para Sklearn
-                nn_wrapper = KerasClassifier(
-                    model=crear_red_neuronal,
-                    input_dim=num_features,
-                    learning_rate=0.001,
-                    neurons=64,
-                    dropout_rate=0.2,
-                    epochs=50,
-                    batch_size=32,
-                    verbose=0,
-                    class_weight={0: 1, 1: 5} # Penalización financiera integrada en los gradientes
-                )
-
-                # Macro-malla de hiperparámetros incluyendo la Red Neuronal
                 config_modelos = {
                     "Logística": {
                         "model": LogisticRegression(class_weight={0: 1, 1: 5}, random_state=42, max_iter=2000),
@@ -283,15 +240,6 @@ elif opcion_menu == "Entrenamiento del Modelo":
                             "clf__subsample": [0.8, 1.0],
                             "clf__scale_pos_weight": [5]
                         }
-                    },
-                    "Red Neuronal (MLP)": {
-                        "model": nn_wrapper,
-                        "params": {
-                            "clf__epochs": [50, 100],
-                            "clf__batch_size": [16, 32],
-                            "clf__neurons": [64, 128],
-                            "clf__learning_rate": [0.001, 0.01]
-                        }
                     }
                 }
 
@@ -302,21 +250,13 @@ elif opcion_menu == "Entrenamiento del Modelo":
 
                 for nombre, config in config_modelos.items():
                     pipeline = Pipeline([('scaler', StandardScaler()), ('clf', config["model"])])
-                    
-                    # Evitamos n_jobs=-1 específicamente en Keras para no provocar bloqueos de hilos (threads) con TensorFlow
-                    n_jobs_actual = 1 if nombre == "Red Neuronal (MLP)" else -1
-                    
-                    grid = GridSearchCV(estimator=pipeline, param_grid=config["params"], scoring=cost_scorer, cv=skf, n_jobs=n_jobs_actual)
+                    grid = GridSearchCV(estimator=pipeline, param_grid=config["params"], scoring=cost_scorer, cv=skf, n_jobs=-1)
                     grid.fit(X_train, y_train)
                     
                     mejor_modelo = grid.best_estimator_
                     modelos_optimizados[nombre] = mejor_modelo
                     
                     y_pred = mejor_modelo.predict(X_test)
-                    # Forzar a vector binario si la salida de la red viene en formato probabilístico continuo
-                    if y_pred.ndim > 1:
-                        y_pred = (y_pred > 0.5).astype(int).flatten()
-                    
                     rep = classification_report(y_test, y_pred, output_dict=True)
                     acc = rep['accuracy']
                     rec = rep['1']['recall']
@@ -345,7 +285,7 @@ elif opcion_menu == "Entrenamiento del Modelo":
                 elif hasattr(final_clf, 'feature_importances_'):
                     importancia = final_clf.feature_importances_
                 else:
-                    importancia = None  # Esto aplicará de forma limpia si gana la Red Neuronal
+                    importancia = None
 
                 # Guardar absolutamente todo el estado del entrenamiento en st.session_state
                 st.session_state['preprocessor'] = preprocessor
@@ -376,6 +316,7 @@ elif opcion_menu == "Entrenamiento del Modelo":
         with c_btn:
             if st.button("🔄 Volver a entrenar", use_container_width=True):
                 st.session_state['entrenamiento_realizado'] = False
+                # Limpieza opcional para evitar residuos en memoria
                 del st.session_state['best_model']
                 del st.session_state['best_model_name']
                 st.rerun()
@@ -405,7 +346,8 @@ elif opcion_menu == "Entrenamiento del Modelo":
             sns.despine()
             st.pyplot(fig_imp)
         else:
-            st.info(f"El algoritmo **{ganador}** no expone métricas nativas de importancia de variables (característico de las arquitecturas Black-Box de Deep Learning).")
+            st.info("Este algoritmo no expone métricas nativas de importancia de variables.")
+
 # ==========================================
 # PESTAÑA 3: PREDICCIÓN DE CRÉDITO
 # ==========================================
