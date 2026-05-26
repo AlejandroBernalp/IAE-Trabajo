@@ -4,13 +4,13 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
-from sklearn.model_selection import train_test_split, StratifiedKFold, GridSearchCV, cross_validate
+from sklearn.model_selection import train_test_split, StratifiedKFold, GridSearchCV
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn.metrics import confusion_matrix, classification_report, make_scorer
 from xgboost import XGBClassifier
-import time
+import io
 
 # Importación del módulo de datos local
 from datos import cargar_datos_desde_r
@@ -21,16 +21,8 @@ from datos import cargar_datos_desde_r
 st.set_page_config(page_title="Statlog (German Credit Data)", page_icon="🏦", layout="wide")
 
 # ==========================================
-# FUNCIONES CACHEADAS (Optimización)
+# FUNCIONES AUXILIARES Y COSTE
 # ==========================================
-@st.cache_data(show_spinner="Extrayendo datos desde R...")
-def obtener_datos():
-    """Ejecuta el ETL solo una vez y guarda el DataFrame en caché."""
-    df = cargar_datos_desde_r()
-    df = df.astype({col: 'category' for col in df.select_dtypes(['object', 'string']).columns})
-    df['class'] = df['class'].astype('category')
-    return df
-
 def calcular_coste_financiero(y_true, y_pred):
     cm = confusion_matrix(y_true, y_pred)
     if cm.shape == (2, 2):
@@ -49,13 +41,6 @@ opcion_menu = st.sidebar.radio(
     ["Análisis Exploratorio", "Entrenamiento del Modelo", "Predicción de Crédito"]
 )
 
-# Carga de datos globales
-try:
-    df_global = obtener_datos()
-except Exception as e:
-    st.error(f"Error crítico al cargar los datos: {e}")
-    st.stop()
-
 # ==========================================
 # PESTAÑA 1: ANÁLISIS EXPLORATORIO
 # ==========================================
@@ -63,9 +48,23 @@ if opcion_menu == "Análisis Exploratorio":
     st.title("📊 Análisis Exploratorio de Datos")
     st.markdown("Se presentan las distribuciones de los distintos atributos financieros y demográficos de los clientes.")
 
+    # Inicializar la carga de datos solo si el usuario entra a esta pestaña
+    if 'df_data' not in st.session_state:
+        with st.spinner("⏳ Conectando con el motor de R y extrayendo el dataset German Credit..."):
+            try:
+                df = cargar_datos_desde_r()
+                df = df.astype({col: 'category' for col in df.select_dtypes(['object', 'string']).columns})
+                df['class'] = df['class'].astype('category')
+                st.session_state['df_data'] = df
+                st.success("✅ ¡Datos cargados con éxito desde R!")
+            except Exception as e:
+                st.error(f"Error crítico al conectar con el motor de R: {e}")
+                st.stop()
+
+    df_global = st.session_state['df_data']
+
     col1, col2 = st.columns([1, 3])
     with col1:
-        # Menú desplegable dinámico con las variables del dataset
         variables_disponibles = [col for col in df_global.columns if col != 'class']
         var_seleccionada = st.selectbox("Seleccione la variable a visualizar:", variables_disponibles)
     
@@ -73,7 +72,6 @@ if opcion_menu == "Análisis Exploratorio":
         st.subheader(f"Distribución de: {var_seleccionada}")
         fig, ax = plt.subplots(figsize=(10, 5))
         
-        # Diferenciar entre gráficos para variables categóricas o numéricas
         if df_global[var_seleccionada].dtype.name == 'category' or df_global[var_seleccionada].dtype == 'object':
             sns.countplot(data=df_global, x=var_seleccionada, hue='class', palette='Set2', ax=ax)
             plt.xticks(rotation=45, ha='right')
@@ -91,12 +89,25 @@ if opcion_menu == "Análisis Exploratorio":
 # ==========================================
 elif opcion_menu == "Entrenamiento del Modelo":
     st.title("⚙️ Optimización y Entrenamiento")
-    st.markdown("En esta sección se entrena la malla de modelos mediante *GridSearchCV* utilizando una función de coste financiero para evaluar el rendimiento óptimo ante el riesgo de crédito.")
+    st.markdown("En esta sección se entrena la malla de modelos mediante *GridSearchCV* utilizando una función de coste financiero.")
     
+    # Asegurar disponibilidad de datos si se va directo a entrenamiento
+    if 'df_data' not in st.session_state:
+        with st.spinner("⏳ Extrayendo datos a través de R para el entrenamiento..."):
+            try:
+                df = cargar_datos_desde_r()
+                df = df.astype({col: 'category' for col in df.select_dtypes(['object', 'string']).columns})
+                df['class'] = df['class'].astype('category')
+                st.session_state['df_data'] = df
+            except Exception as e:
+                st.error(f"Error al cargar datos para entrenamiento: {e}")
+                st.stop()
+
+    df_global = st.session_state['df_data']
+
     if st.button("🚀 Iniciar Entrenamiento (GridSearch)"):
         with st.spinner("Entrenando macro-malla de algoritmos. Este proceso puede tardar unos minutos..."):
             
-            # Preparación de variables categóricas para el preprocesador
             nominal_cols = ['credit_history', 'purpose', 'personal_status', 'other_debtors', 'property_type', 'installment_plans', 'housing_type']
             ordinal_cols = ['checking_status', 'savings_status', 'employment_since', 'job_type']
             binary_cols = ['telephone', 'foreign_worker']
@@ -118,13 +129,12 @@ elif opcion_menu == "Entrenamiento del Modelo":
             )
 
             X = df_global.drop(columns=['class'])
-            y = df_global['class'].astype(int).replace({1: 0, 2: 1}) # 0 = Bueno, 1 = Malo
+            y = df_global['class'].astype(int).replace({1: 0, 2: 1})
 
             X_processed = preprocessor.fit_transform(X)
             cols_names = preprocessor.get_feature_names_out()
             df_final = pd.DataFrame(X_processed, columns=cols_names).apply(pd.to_numeric)
 
-            # División de los datos
             X_train, X_test, y_train, y_test = train_test_split(df_final, y, test_size=0.2, random_state=42, stratify=y)
             cost_scorer = make_scorer(calcular_coste_financiero, greater_is_better=False)
 
@@ -172,7 +182,6 @@ elif opcion_menu == "Entrenamiento del Modelo":
                 mejor_modelo = grid.best_estimator_
                 modelos_optimizados[nombre] = mejor_modelo
                 
-                # Predicciones y métricas
                 y_pred = mejor_modelo.predict(X_test)
                 rep = classification_report(y_test, y_pred, output_dict=True)
                 acc = rep['accuracy']
@@ -194,7 +203,6 @@ elif opcion_menu == "Entrenamiento del Modelo":
 
             df_resultados = pd.DataFrame(resultados_cv)
             
-            # Guardar artefactos globales para la pestaña de predicción
             st.session_state['preprocessor'] = preprocessor
             st.session_state['cols_names'] = cols_names
             ganador = min(resultados_test, key=resultados_test.get)
@@ -204,7 +212,6 @@ elif opcion_menu == "Entrenamiento del Modelo":
             st.success(f"Entrenamiento finalizado. El mejor modelo recomendado es: **{ganador}** (Coste: {resultados_test[ganador]})")
             st.dataframe(df_resultados.style.highlight_min(subset=['Coste Financiero'], color='lightgreen'))
 
-            # Gráfico multicriterio
             st.subheader("Comparativa de Rendimiento en Test")
             df_plot = df_resultados.melt(id_vars=["Algoritmo"], value_vars=["Accuracy", "Recall (Malos)", "F1-Score"], var_name="Métrica", value_name="Valor")
             fig_perf, ax_perf = plt.subplots(figsize=(10, 5))
@@ -213,7 +220,6 @@ elif opcion_menu == "Entrenamiento del Modelo":
             sns.despine()
             st.pyplot(fig_perf)
 
-            # Importancia de variables del modelo ganador
             st.subheader(f"Importancia de Variables ({ganador})")
             final_clf = modelos_optimizados[ganador].named_steps['clf']
             
@@ -283,7 +289,6 @@ elif opcion_menu == "Predicción de Crédito":
         submit_button = st.form_submit_button(label="🔍 Evaluar Riesgo")
 
     if submit_button:
-        # Construcción del DataFrame con el cliente nuevo
         datos_cliente = {
             'checking_status': checking_status,
             'duration_months': duration_months,
@@ -308,14 +313,12 @@ elif opcion_menu == "Predicción de Crédito":
         }
         
         df_input = pd.DataFrame([datos_cliente])
-        
-        # Preprocesamiento idéntico al entrenamiento
         df_input = df_input.astype({col: 'category' for col in df_input.select_dtypes(['object', 'string']).columns})
+        
         preprocessor = st.session_state['preprocessor']
         X_pred_proc = preprocessor.transform(df_input)
         df_pred_final = pd.DataFrame(X_pred_proc, columns=st.session_state['cols_names']).apply(pd.to_numeric)
         
-        # Realización de la predicción
         modelo = st.session_state['best_model']
         prediccion = modelo.predict(df_pred_final)[0]
         
