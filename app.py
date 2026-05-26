@@ -202,33 +202,40 @@ elif opcion_menu == "Entrenamiento del Modelo":
             from sklearn.pipeline import Pipeline
             
             config_modelos = {
-                "Logística": {
-                    "model": LogisticRegression(class_weight={0: 1, 1: 5}, random_state=42, max_iter=2000),
-                    "params": {"clf__C": [0.01, 0.1, 1, 10]}
-                },
-                "SVM": {
-                    "model": SVC(class_weight={0: 1, 1: 5}, random_state=42),
-                    "params": {"clf__C": [0.1, 1, 10], "clf__kernel": ['linear', 'rbf']}
-                },
-                "Random Forest": {
-                    "model": RandomForestClassifier(class_weight={0: 1, 1: 5}, random_state=42),
-                    "params": {
-                        "clf__n_estimators": [100, 200],
-                        "clf__max_depth": [4, 6, 8],
-                        "clf__min_samples_leaf": [5, 10, 15]
-                    }
-                },
-                "XGBoost": {
-                    "model": XGBClassifier(random_state=42, eval_metric='logloss', n_jobs=1),
-                    "params": {
-                        "clf__learning_rate": [0.05, 0.1],
-                        "clf__max_depth": [3, 4, 6],
-                        "clf__n_estimators": [100, 200],
-                        "clf__subsample": [0.8, 1.0],
-                        "clf__scale_pos_weight": [5]
+                    "Logística": {
+                        "model": LogisticRegression(class_weight={0: 1, 1: 5}, random_state=42, max_iter=2000),
+                        "params": {
+                            "clf__C": [0.001, 0.01, 0.05, 0.1, 0.5, 1, 10, 50]
+                        }
+                    },
+                    "SVM": {
+                        "model": SVC(class_weight={0: 1, 1: 5}, random_state=42),
+                        "params": {
+                            "clf__C": [0.01, 0.1, 1, 5, 10, 50],
+                            "clf__kernel": ['linear', 'rbf'],
+                            "clf__gamma": ['scale', 'auto', 0.01, 0.1]
+                        }
+                    },
+                    "Random Forest": {
+                        "model": RandomForestClassifier(class_weight={0: 1, 1: 5}, random_state=42),
+                        "params": {
+                            "clf__n_estimators": [100, 200, 400],
+                            "clf__max_depth": [4, 6, 8, 12, None],
+                            "clf__min_samples_leaf": [5, 10, 15, 20],
+                            "clf__criterion": ["gini", "entropy"]
+                        }
+                    },
+                    "XGBoost": {
+                        "model": XGBClassifier(random_state=42, eval_metric='logloss', n_jobs=1),
+                        "params": {
+                            "clf__learning_rate": [0.01, 0.05, 0.1, 0.2],
+                            "clf__max_depth": [3, 4, 6, 8],
+                            "clf__n_estimators": [100, 200, 300],
+                            "clf__subsample": [0.8, 1.0],
+                            "clf__scale_pos_weight": [5]
+                        }
                     }
                 }
-            }
 
             skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
             modelos_optimizados = {}
