@@ -169,7 +169,7 @@ if opcion_menu == "Análisis Exploratorio":
         # ==========================================
         if df_plot[var_seleccionada].dtype.name == 'category' or df_plot[var_seleccionada].dtype == 'object':
             
-            # Añadimos un selector debajo del original en col1 (puedes mover este bloque a col1 si prefieres)
+            # Selector de tipo de gráfico en la columna de la derecha o donde prefieras
             tipo_grafico_cat = st.radio(
                 "Tipo de visualización:",
                 ["Frecuencias Absolutas", "Proporciones Relativas (100%)"],
@@ -179,17 +179,22 @@ if opcion_menu == "Análisis Exploratorio":
             fig, ax = plt.subplots(figsize=(10, 5))
             
             if tipo_grafico_cat == "Frecuencias Absolutas":
-                # Tu gráfico original
-                sns.countplot(data=df_plot, x=var_seleccionada, hue='class', palette='Set2', ax=ax)
+                # Gráfico original indexado por Seaborn
+                sns.countplot(data=df_plot, x=var_seleccionada, hue='class', hue_order=['Good', 'Bad'], palette='Set2', ax=ax)
                 plt.ylabel("Número de clientes")
                 ax.legend(title="Estado Crédito")
                 
             else:
-                # Cómputo de proporciones relativas (Tabla de contingencia normalizada por filas)
+                # Cómputo de proporciones relativas
                 tabla_contingencia = pd.crosstab(df_plot[var_seleccionada], df_plot['class'], normalize='index') * 100
                 
-                # Gráfico de barras apiladas al 100%
-                tabla_contingencia.plot(kind='bar', stacked=True, color=sns.color_palette('Set2', 2), ax=ax)
+                # FORZAMOS EL ORDEN DE LAS COLUMNAS: Asegura que 'Good' sea la primera serie y 'Bad' la segunda
+                # Evita que Pandas altere el orden de los factores al mapear la paleta de colores
+                columnas_ordenadas = [col for col in ['Good', 'Bad'] if col in tabla_contingencia.columns]
+                tabla_contingencia = tabla_contingencia[columnas_ordenadas]
+                
+                # Gráfico de barras apiladas al 100% con el orden corregido
+                tabla_contingencia.plot(kind='bar', stacked=True, color=sns.color_palette('Set2', len(columnas_ordenadas)), ax=ax)
                 plt.ylabel("Porcentaje (%)")
                 ax.legend(title="Estado Crédito", loc='upper left', bbox_to_anchor=(1, 1))
             
