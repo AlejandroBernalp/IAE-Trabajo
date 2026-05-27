@@ -160,14 +160,19 @@ if opcion_menu == "Análisis Exploratorio":
     with col2:
         st.subheader(f"Análisis de la variable: {var_seleccionada}")
         
+        # Creamos una copia temporal para cambiar visualmente las etiquetas de la leyenda/ejes
+        df_plot = df_global.copy()
+        df_plot['class'] = df_plot['class'].astype(str).replace({'1': 'Good', '2': 'Bad', 1: 'Good', 2: 'Bad'})
+        
         # Comprobamos si la variable es categórica/objeto
-        if df_global[var_seleccionada].dtype.name == 'category' or df_global[var_seleccionada].dtype == 'object':
+        if df_plot[var_seleccionada].dtype.name == 'category' or df_plot[var_seleccionada].dtype == 'object':
             # Gráfico único para categóricas
             fig, ax = plt.subplots(figsize=(10, 5))
-            sns.countplot(data=df_global, x=var_seleccionada, hue='class', palette='Set2', ax=ax)
+            sns.countplot(data=df_plot, x=var_seleccionada, hue='class', palette='Set2', ax=ax)
             plt.xticks(rotation=45, ha='right')
             plt.ylabel("Número de clientes")
             plt.xlabel(var_seleccionada)
+            ax.legend(title="Estado Crédito")
             sns.despine()
             st.pyplot(fig)
             
@@ -176,18 +181,18 @@ if opcion_menu == "Análisis Exploratorio":
             fig, (ax_hist, ax_box) = plt.subplots(1, 2, figsize=(12, 5))
             
             # Subtrama 1: Histograma (Izquierda)
-            sns.histplot(data=df_global, x=var_seleccionada, hue='class', multiple="stack", palette='Set2', kde=True, ax=ax_hist)
+            sns.histplot(data=df_plot, x=var_seleccionada, hue='class', multiple="stack", palette='Set2', kde=True, ax=ax_hist)
             ax_hist.set_title("Histograma de Frecuencias")
             ax_hist.set_ylabel("Frecuencia")
             ax_hist.set_xlabel(var_seleccionada)
             
             # Subtrama 2: Boxplot por cada clase (Derecha)
-            sns.boxplot(data=df_global, x='class', y=var_seleccionada, palette='Set2', hue='class', legend=False, ax=ax_box)
+            sns.boxplot(data=df_plot, x='class', y=var_seleccionada, palette='Set2', hue='class', legend=False, ax=ax_box)
             ax_box.set_title("Diagrama de Cajas por Clase")
             ax_box.set_ylabel(var_seleccionada)
             ax_box.set_xlabel("Clase (class)")
             
-            # Ajustamos el espaciado entre ambos gráficos para que no se solapen los ejes
+            # Ajustamos el espaciado entre ambos gráficos
             plt.tight_layout()
             sns.despine()
             st.pyplot(fig)
