@@ -1,33 +1,43 @@
-# 🤖 Proyecto de Inteligencia Artificial - Clasificación de Crédito
+# 📊 Aplicación de Deep Learning para Clasificación de Riesgo Financiero
 
-Este repositorio contiene el flujo de trabajo para el análisis y modelado de datos de crédito utilizando Python y R.
+Este proyecto contiene una aplicación interactiva desarrollada en **Streamlit** que integra modelos avanzados de Machine Learning y Deep Learning para la evaluación y clasificación del riesgo de crédito de clientes. 
 
-## 📋 Estructura del Proyecto
-
-Actualmente, el pipeline se divide en dos fases principales:
-
-### 1. Preprocesamiento y Limpieza (R)
-*   **Archivo:** `import_y_limpieza.R`
-*   **Descripción:** 
-    *   Conecta con el repositorio UCI mediante el paquete `ucimlrepo`.
-    *   **Tratamiento de datos:** Traduce los códigos técnicos (ej. *A11, A12*) y nombres genéricos de columnas (*Attribute1, Attribute2*) a términos comprensibles y descriptivos.
-    *   **Salida:** Genera un archivo local `german_credit_clean.csv` (ignorado en Git por su peso, pero necesario para el siguiente paso).
-
-### 2. Ingeniería de Características (Python)
-*   **Archivo:** `main.py`
-*   **Descripción:** 
-    *   Carga el dataset limpio generado en el paso anterior.
-    *   **Codificación:** Aplica técnicas de transformación para preparar los datos para modelos de ML:
-        *   **One-Hot Encoding** para variables nominales.
-        *   **Binary Encoding** para variables dicotómicas.
-        *   **Ordinal Encoding** para variables con jerarquía.
-*   **Próximamente:** Implementación y evaluación de modelos de Machine Learning.
+La plataforma web combina un backend analítico que procesa datos estructurados con una interfaz visual intuitiva para el análisis exploratorio y la predicción en tiempo real.
 
 ---
 
-## 🛠️ Instalación y Configuración
+## 🎯 Objetivo del Proyecto
 
-### Requisitos de Python (uv)
-Este proyecto utiliza `uv` para la gestión de dependencias. Para sincronizar tu entorno virtual:
+El objetivo principal es construir y desplegar un pipeline robusto e interactivo de extremo a extremo (*End-to-End*) que automatice la ingesta de datos de clientes, realice un análisis exploratorio avanzado y evalúe el riesgo financiero utilizando arquitecturas de redes neuronales y modelos de ensamble. 
+
+El proyecto destaca por su naturaleza híbrida, utilizando **R** para tareas específicas de extracción y transformación de datos, y **Python** como motor principal para el modelado predictivo y la interfaz de usuario.
+
+---
+
+## 🧩 Problema que Resuelve la Aplicación
+
+En el sector financiero, evaluar la concesión de un crédito de forma manual consume una cantidad ingente de tiempo y está sujeto a sesgos humanos. Esta aplicación resuelve el problema mediante la **automatización de la clasificación del riesgo (Clientes *Good* vs. *Bad*)**:
+
+1. **Elimina el sesgo de volumen:** Permite a los analistas evaluar visualmente las tasas de morosidad relativas por categorías mediante gráficos de proporciones apiladas al 100%.
+2. **Mitiga pérdidas financieras:** Optimiza los modelos bajo funciones de coste personalizadas que penalizan con mayor severidad los falsos negativos (aprobar un crédito a un cliente con perfil de alto riesgo).
+3. **Decisiones reproducibles:** Ofrece una sección de predicción donde se introducen los parámetros de un cliente y se genera un diagnóstico estandarizado e inmediato basado en el modelo entrenado.
+
+---
+
+## 💻 Requisitos del Sistema
+
+Para garantizar la correcta ejecución del pipeline híbrido, el sistema anfitrión debe contar con:
+* **Python 3.11** o **Python 3.12** (Entorno optimizado)
+* **R-base** instalado en el sistema (el ejecutable `Rscript` debe estar accesible en el PATH del sistema o en `/usr/bin/Rscript`).
+
+---
+
+## 🛠️ Creación del Entorno
+
+Para evitar conflictos de dependencias en local, se recomienda crear un entorno virtual limpio utilizando el gestor rápido `uv` o el módulo nativo `venv`.
+
+### Opción A: Usando `uv` (Recomendado por su velocidad)
+Si no tienes `uv` instalado, puedes instalarlo mediante pip, y luego crear el entorno:
 ```bash
-uv sync
+pip install uv
+uv venv --python 3.11
