@@ -164,15 +164,37 @@ if opcion_menu == "Análisis Exploratorio":
         df_plot = df_global.copy()
         df_plot['class'] = df_plot['class'].astype(str).replace({'1': 'Good', '2': 'Bad', 1: 'Good', 2: 'Bad'})
         
-        # Comprobamos si la variable es categórica/objeto
+        # ==========================================
+        # CONTROL PARA VARIABLES CATEGÓRICAS
+        # ==========================================
         if df_plot[var_seleccionada].dtype.name == 'category' or df_plot[var_seleccionada].dtype == 'object':
-            # Gráfico único para categóricas
+            
+            # Añadimos un selector debajo del original en col1 (puedes mover este bloque a col1 si prefieres)
+            tipo_grafico_cat = st.radio(
+                "Tipo de visualización:",
+                ["Frecuencias Absolutas", "Proporciones Relativas (100%)"],
+                key="cat_vis_selector"
+            )
+            
             fig, ax = plt.subplots(figsize=(10, 5))
-            sns.countplot(data=df_plot, x=var_seleccionada, hue='class', palette='Set2', ax=ax)
+            
+            if tipo_grafico_cat == "Frecuencias Absolutas":
+                # Tu gráfico original
+                sns.countplot(data=df_plot, x=var_seleccionada, hue='class', palette='Set2', ax=ax)
+                plt.ylabel("Número de clientes")
+                ax.legend(title="Estado Crédito")
+                
+            else:
+                # Cómputo de proporciones relativas (Tabla de contingencia normalizada por filas)
+                tabla_contingencia = pd.crosstab(df_plot[var_seleccionada], df_plot['class'], normalize='index') * 100
+                
+                # Gráfico de barras apiladas al 100%
+                tabla_contingencia.plot(kind='bar', stacked=True, color=sns.color_palette('Set2', 2), ax=ax)
+                plt.ylabel("Porcentaje (%)")
+                ax.legend(title="Estado Crédito", loc='upper left', bbox_to_anchor=(1, 1))
+            
             plt.xticks(rotation=45, ha='right')
-            plt.ylabel("Número de clientes")
             plt.xlabel(var_seleccionada)
-            ax.legend(title="Estado Crédito")
             sns.despine()
             st.pyplot(fig)
             
