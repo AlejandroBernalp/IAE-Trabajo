@@ -92,7 +92,6 @@ def crear_red_neuronal(meta, **kwargs):
         tf.keras.layers.Dense(1, activation='sigmoid')
     ])
     
-    # Bajamos un pelín el learning rate para que el gradiente no de saltos bruscos
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=0.005),
         loss='binary_crossentropy',
@@ -151,7 +150,7 @@ df_global = st.session_state['df_data']
 if opcion_menu == "Análisis Exploratorio":
     st.title("📊 Análisis Exploratorio de Datos")
     st.markdown("Se presentan las distribuciones de los distintos atributos financieros y demográficos de los clientes.")
-    st.success("✅ ¡Datos cargados desde R y preprocesados en Python de forma paralela!")
+    st.success("✅ ¡Datos cargados desde R y preprocesados en Python!")
 
     col1, col2 = st.columns([1, 3])
     with col1:
@@ -159,20 +158,39 @@ if opcion_menu == "Análisis Exploratorio":
         var_seleccionada = st.selectbox("Seleccione la variable a visualizar:", variables_disponibles)
     
     with col2:
-        st.subheader(f"Distribución de: {var_seleccionada}")
-        fig, ax = plt.subplots(figsize=(10, 5))
+        st.subheader(f"Análisis de la variable: {var_seleccionada}")
         
+        # Comprobamos si la variable es categórica/objeto
         if df_global[var_seleccionada].dtype.name == 'category' or df_global[var_seleccionada].dtype == 'object':
+            # Gráfico único para categóricas
+            fig, ax = plt.subplots(figsize=(10, 5))
             sns.countplot(data=df_global, x=var_seleccionada, hue='class', palette='Set2', ax=ax)
             plt.xticks(rotation=45, ha='right')
             plt.ylabel("Número de clientes")
-        else:
-            sns.histplot(data=df_global, x=var_seleccionada, hue='class', multiple="stack", palette='Set2', kde=True, ax=ax)
-            plt.ylabel("Frecuencia")
+            plt.xlabel(var_seleccionada)
+            sns.despine()
+            st.pyplot(fig)
             
-        plt.xlabel(var_seleccionada)
-        sns.despine()
-        st.pyplot(fig)
+        else:
+            # Creamos una figura con 2 subgráficos en paralelo para variables numéricas
+            fig, (ax_hist, ax_box) = plt.subplots(1, 2, figsize=(12, 5))
+            
+            # Subtrama 1: Histograma (Izquierda)
+            sns.histplot(data=df_global, x=var_seleccionada, hue='class', multiple="stack", palette='Set2', kde=True, ax=ax_hist)
+            ax_hist.set_title("Histograma de Frecuencias")
+            ax_hist.set_ylabel("Frecuencia")
+            ax_hist.set_xlabel(var_seleccionada)
+            
+            # Subtrama 2: Boxplot por cada clase (Derecha)
+            sns.boxplot(data=df_global, x='class', y=var_seleccionada, palette='Set2', hue='class', legend=False, ax=ax_box)
+            ax_box.set_title("Diagrama de Cajas por Clase")
+            ax_box.set_ylabel(var_seleccionada)
+            ax_box.set_xlabel("Clase (class)")
+            
+            # Ajustamos el espaciado entre ambos gráficos para que no se solapen los ejes
+            plt.tight_layout()
+            sns.despine()
+            st.pyplot(fig)
 
 # ==========================================
 # PESTAÑA 2: ENTRENAMIENTO DEL MODELO
@@ -185,8 +203,8 @@ elif opcion_menu == "Entrenamiento del Modelo":
         st.session_state['entrenamiento_realizado'] = False
 
     if not st.session_state['entrenamiento_realizado']:
-        if st.button("🚀 Iniciar Entrenamiento (GridSearch con Red Neuronal)"):
-            with st.spinner("Entrenando macro-malla de algoritmos (incluyendo Red Neuronal). Este proceso puede tardar unos minutos..."):
+        if st.button("🚀 Iniciar Entrenamiento"):
+            with st.spinner("Entrenando algoritmos. Este proceso puede tardar unos minutos..."):
                 
                 nominal_cols = ['credit_history', 'purpose', 'personal_status', 'other_debtors', 'property_type', 'installment_plans', 'housing_type']
                 ordinal_cols = ['checking_status', 'savings_status', 'employment_since', 'job_type']
