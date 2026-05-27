@@ -318,7 +318,7 @@ elif opcion_menu == "Entrenamiento del Modelo":
 
                 for nombre, config in config_modelos.items():
                     pipeline = Pipeline([('scaler', StandardScaler()), ('clf', config["model"])])
-                    grid = GridSearchCV(estimator=pipeline, param_grid=config["params"], scoring=cost_scorer, cv=skf, n_jobs=-1)
+                    grid = GridSearchCV(estimator=pipeline, param_grid=config["params"], scoring=cost_scorer, cv=skf, n_jobs=1)
                     grid.fit(X_train, y_train)
                     
                     mejor_modelo = grid.best_estimator_
