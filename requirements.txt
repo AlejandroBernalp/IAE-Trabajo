@@ -422,3 +422,5 @@ xgboost==3.2.0
     # via tf (pyproject.toml)
 zict==3.0.0
     # via distributed
+tensorflow>=2.15.0
+scikeras>=0.13.0

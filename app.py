@@ -12,7 +12,10 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.svm import SVC
 from sklearn.metrics import confusion_matrix, classification_report, make_scorer
 from xgboost import XGBClassifier
-import io
+
+# --- NUEVAS IMPORTACIONES PARA EL DEEP LEARNING ---
+import tensorflow as tf
+from scikeras.wrappers import KerasClassifier
 
 # Importación del módulo de datos local (Extractor Crudo)
 from datos import cargar_datos_desde_r
@@ -53,20 +56,15 @@ def preprocesar_con_pandas(df_crudo):
     return df
 
 def preprocesar_con_dask(df_crudo):
-    # Convertimos a colección Dask particionando para forzar cómputo paralelo en bloques
     ddf = dd.from_pandas(df_crudo, npartitions=4)
-    
-    # Reemplazo perezoso estructurado (Lazy Evaluation)
     for columna, mapa in MAPEOS_GERMAN_CREDIT.items():
         ddf[columna] = ddf[columna].replace(mapa)
         
-    # Cómputo usando el planificador multinúcleo por hilos (Inofensivo para los límites de Streamlit)
-    df_procesado = ddf.compute(scheduler='threads')
-    
-    columnas_texto = df_procesado.select_dtypes(include=['object', 'string']).columns
-    df_procesado[columnas_texto] = df_procesado[columnas_texto].astype('category')
-    df_procesado['class'] = df_procesado['class'].astype('category')
-    return df_procesado
+    df_processed = ddf.compute(scheduler='threads')
+    columnas_texto = df_processed.select_dtypes(include=['object', 'string']).columns
+    df_processed[columnas_texto] = df_processed[columnas_texto].astype('category')
+    df_processed['class'] = df_processed['class'].astype('category')
+    return df_processed
 
 # ==========================================
 # FUNCIONES AUXILIARES Y COSTE
@@ -79,28 +77,47 @@ def calcular_coste_financiero(y_true, y_pred):
         return (fp * 1) + (fn * 5)
     return 9999
 
+# --- FUNCIÓN CONSTRUCTORA PARA LA RED NEURONAL ---
+# Modifica la función constructora para aceptar parámetros de ajuste
+def crear_red_neuronal(meta, **kwargs):
+    n_features = meta["n_features_in_"]
+    
+    model = tf.keras.models.Sequential([
+        tf.keras.layers.Dense(64, activation='relu', input_shape=(n_features,)),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.3),  # Un poco más de dropout para evitar sobreajuste
+        tf.keras.layers.Dense(32, activation='relu'),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(1, activation='sigmoid')
+    ])
+    
+    # Bajamos un pelín el learning rate para que el gradiente no de saltos bruscos
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.005),
+        loss='binary_crossentropy',
+        metrics=['accuracy']
+    )
+    return model
+
 # ==========================================
 # MOTOR CENTRAL DE CARGA E INGENIERÍA DE DATOS
 # ==========================================
 if 'df_data' not in st.session_state:
     with st.spinner("⏳ Extrayendo dataset crudo y evaluando motores de procesamiento (Pandas vs Dask)..."):
         try:
-            # 1. Llamada a R para descargar el CSV crudo desde UCI
             df_inicial = cargar_datos_desde_r()
             st.session_state['df_crudo'] = df_inicial
             
-            # 2. Benchmark de ingeniería de características: Pandas
             start_p = time.time()
             df_pandas_final = preprocesar_con_pandas(df_inicial)
             tiempo_pandas = time.time() - start_p
             
-            # 3. Benchmark de ingeniería de características: Dask DataFrame
             start_d = time.time()
             df_dask_final = preprocesar_con_dask(df_inicial)
             tiempo_dask = time.time() - start_d
             
-            # Almacenamiento en sesión
-            st.session_state['df_data'] = df_pandas_final  # Dataset normalizado para la UI
+            st.session_state['df_data'] = df_pandas_final  
             st.session_state['t_pandas_etl'] = tiempo_pandas
             st.session_state['t_dask_etl'] = tiempo_dask
             
@@ -118,13 +135,11 @@ opcion_menu = st.sidebar.radio(
     ["Análisis Exploratorio", "Entrenamiento del Modelo", "Predicción de Crédito"]
 )
 
-# Panel de Métricas ETL integrado en la barra lateral para seguimiento académico
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔬 Rendimiento ETL (Preprocesamiento)")
 st.sidebar.metric(label="Tiempo con Pandas", value=f"{st.session_state['t_pandas_etl']:.5f} s")
 st.sidebar.metric(label="Tiempo con Dask DF", value=f"{st.session_state['t_dask_etl']:.5f} s")
 
-# Cálculo de la tasa de sobrecarga estructural
 overhead_etl = ((st.session_state['t_dask_etl'] - st.session_state['t_pandas_etl']) / st.session_state['t_pandas_etl']) * 100
 st.sidebar.caption(f"Dask presenta un *overhead* del `{overhead_etl:.1f}%` debido al fraccionamiento de grafos en colecciones pequeñas.")
 
@@ -166,14 +181,12 @@ elif opcion_menu == "Entrenamiento del Modelo":
     st.title("⚙️ Optimización y Entrenamiento")
     st.markdown("En esta sección se entrena la malla de modelos mediante *GridSearchCV* utilizando una función de coste financiero.")
 
-    # Control de estado de entrenamiento en la sesión
     if 'entrenamiento_realizado' not in st.session_state:
         st.session_state['entrenamiento_realizado'] = False
 
-    # SI NO SE HA ENTRENADO AÚN: Mostrar el botón de inicio
     if not st.session_state['entrenamiento_realizado']:
-        if st.button("🚀 Iniciar Entrenamiento (GridSearch)"):
-            with st.spinner("Entrenando macro-malla de algoritmos. Este proceso puede tardar unos minutos..."):
+        if st.button("🚀 Iniciar Entrenamiento (GridSearch con Red Neuronal)"):
+            with st.spinner("Entrenando macro-malla de algoritmos (incluyendo Red Neuronal). Este proceso puede tardar unos minutos..."):
                 
                 nominal_cols = ['credit_history', 'purpose', 'personal_status', 'other_debtors', 'property_type', 'installment_plans', 'housing_type']
                 ordinal_cols = ['checking_status', 'savings_status', 'employment_since', 'job_type']
@@ -207,41 +220,96 @@ elif opcion_menu == "Entrenamiento del Modelo":
 
                 from sklearn.pipeline import Pipeline
                 
+                # Instanciación del contenedor Keras para sklearn con callbacks de parada temprana
+                # Calculamos los pesos de clase idénticos a tus modelos tradicionales {0: 1, 1: 5}
+                # En SciKeras se le pasa como un diccionario o usando la palabra clave 'balanced'
+                nn_wrapper = KerasClassifier(
+                    model=crear_red_neuronal,
+                    epochs=50,
+                    batch_size=32,
+                    verbose=0,
+                    validation_split=0.1,
+                    class_weight={0: 1.0, 1: 5.0},  # <--- ESTO OBLIGA A LA RED A BUSCAR RECALL
+                    callbacks=[tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=7, restore_best_weights=True)]
+                )
+
                 config_modelos = {
+
                     "Logística": {
+
                         "model": LogisticRegression(class_weight={0: 1, 1: 5}, random_state=42, max_iter=2000),
-                        "params": {
-                            "clf__C": [0.001, 0.01, 0.05, 0.1, 0.5, 1, 10, 50]
-                        }
+
+                        "params": {"clf__C": [0.01, 0.1, 1, 10]}
+
                     },
+
                     "SVM": {
+
                         "model": SVC(class_weight={0: 1, 1: 5}, random_state=42),
+
                         "params": {
-                            "clf__C": [0.01, 0.1, 1, 5, 10, 50],
-                            "clf__kernel": ['linear', 'rbf'],
-                            "clf__gamma": ['scale', 'auto', 0.01, 0.1]
+
+                            "clf__C": [0.1, 1, 10],
+
+                            "clf__kernel": ['linear', 'rbf']
+
                         }
+
                     },
+
                     "Random Forest": {
+
                         "model": RandomForestClassifier(class_weight={0: 1, 1: 5}, random_state=42),
+
                         "params": {
-                            "clf__n_estimators": [100, 200, 400],
-                            "clf__max_depth": [4, 6, 8, 12, None],
-                            "clf__min_samples_leaf": [5, 10, 15, 20],
-                            "clf__criterion": ["gini", "entropy"]
+
+                            "clf__n_estimators": [100, 200],
+
+                            "clf__max_depth": [6, 12, None],
+
+                            "clf__min_samples_leaf": [5, 15]
+
                         }
+
                     },
+
                     "XGBoost": {
+
                         "model": XGBClassifier(random_state=42, eval_metric='logloss', n_jobs=1),
+
                         "params": {
-                            "clf__learning_rate": [0.01, 0.05, 0.1, 0.2],
-                            "clf__max_depth": [3, 4, 6, 8],
-                            "clf__n_estimators": [100, 200, 300],
-                            "clf__subsample": [0.8, 1.0],
+
+                            "clf__learning_rate": [0.05, 0.1],
+
+                            "clf__max_depth": [4, 6],
+
+                            "clf__n_estimators": [100, 200],
+
                             "clf__scale_pos_weight": [5]
+
                         }
+
+                    },
+
+                    # --- CONFIGURACIÓN DE LA RED NEURONAL EN LA MALLA ---
+
+                    "Red Neuronal (MLP)": {
+
+                        "model": nn_wrapper,
+
+                        "params": {
+
+                            "clf__batch_size": [16, 32],
+
+                            "clf__epochs": [30, 50]
+
+                        }
+
                     }
-                }
+
+                } 
+
+
 
                 skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
                 modelos_optimizados = {}
@@ -257,6 +325,11 @@ elif opcion_menu == "Entrenamiento del Modelo":
                     modelos_optimizados[nombre] = mejor_modelo
                     
                     y_pred = mejor_modelo.predict(X_test)
+                    
+                    # Umbralizado binario explícito para la salida de la Red Neuronal si devuelve probabilidades
+                    if nombre == "Red Neuronal (MLP)":
+                        y_pred = (y_pred > 0.5).astype(int).flatten()
+                        
                     rep = classification_report(y_test, y_pred, output_dict=True)
                     acc = rep['accuracy']
                     rec = rep['1']['recall']
@@ -278,7 +351,7 @@ elif opcion_menu == "Entrenamiento del Modelo":
                 df_resultados = pd.DataFrame(resultados_cv)
                 ganador = min(resultados_test, key=resultados_test.get)
                 
-                # Extracción de importancia de variables del ganador
+                # Extracción de importancia de variables para modelos tradicionales
                 final_clf = modelos_optimizados[ganador].named_steps['clf']
                 if hasattr(final_clf, 'coef_'):
                     importancia = final_clf.coef_.flatten()
@@ -287,7 +360,6 @@ elif opcion_menu == "Entrenamiento del Modelo":
                 else:
                     importancia = None
 
-                # Guardar absolutamente todo el estado del entrenamiento en st.session_state
                 st.session_state['preprocessor'] = preprocessor
                 st.session_state['cols_names'] = cols_names
                 st.session_state['best_model'] = modelos_optimizados[ganador]
@@ -297,11 +369,9 @@ elif opcion_menu == "Entrenamiento del Modelo":
                 st.session_state['importancia_ganador'] = importancia
                 st.session_state['df_final_cols'] = df_final.columns
                 
-                # Marcar como completado para congelar la pestaña
                 st.session_state['entrenamiento_realizado'] = True
                 st.rerun()
 
-    # SI YA HA SIDO ENTRENADO ANTES: Recuperar los objetos y renderizarlos directamente
     else:
         ganador = st.session_state['best_model_name']
         coste_ganador = st.session_state['resultados_test'][ganador]
@@ -309,22 +379,18 @@ elif opcion_menu == "Entrenamiento del Modelo":
         importancia = st.session_state['importancia_ganador']
         df_final_cols = st.session_state['df_final_cols']
 
-        # Cabecera de éxito persistente con botón de reinicio al lado
         c_info, c_btn = st.columns([4, 1])
         with c_info:
             st.success(f"🎉 El entrenamiento está activo. El mejor modelo recomendado es: **{ganador}** (Coste: {coste_ganador})")
         with c_btn:
             if st.button("🔄 Volver a entrenar", use_container_width=True):
                 st.session_state['entrenamiento_realizado'] = False
-                # Limpieza opcional para evitar residuos en memoria
                 del st.session_state['best_model']
                 del st.session_state['best_model_name']
                 st.rerun()
 
-        # Mostrar tabla de resultados estática
         st.dataframe(df_resultados.style.highlight_min(subset=['Coste Financiero'], color='lightgreen'))
 
-        # Renderizar Gráfico de Métricas de Test
         st.subheader("Comparativa de Rendimiento en Test")
         df_plot = df_resultados.melt(id_vars=["Algoritmo"], value_vars=["Accuracy", "Recall (Malos)", "F1-Score"], var_name="Métrica", value_name="Valor")
         fig_perf, ax_perf = plt.subplots(figsize=(10, 5))
@@ -333,7 +399,6 @@ elif opcion_menu == "Entrenamiento del Modelo":
         sns.despine()
         st.pyplot(fig_perf)
 
-        # Renderizar Gráfico de Importancia de Variables
         st.subheader(f"Importancia de Variables ({ganador})")
         if importancia is not None:
             importance_df = pd.DataFrame({'Feature': df_final_cols, 'Importance': importancia})
@@ -346,7 +411,7 @@ elif opcion_menu == "Entrenamiento del Modelo":
             sns.despine()
             st.pyplot(fig_imp)
         else:
-            st.info("Este algoritmo no expone métricas nativas de importancia de variables.")
+            st.info("El algoritmo ganador actual (como el MLP o SVM RBF) no expone métricas nativas lineales de importancia de variables.")
 
 # ==========================================
 # PESTAÑA 3: PREDICCIÓN DE CRÉDITO
@@ -383,7 +448,7 @@ elif opcion_menu == "Predicción de Crédito":
         employment_since = c6.selectbox("Empleado desde hace", ["unemployed", "< 1 year", "1-4 years", "4-7 years", ">= 7 years"])
         
         job_type = c4.selectbox("Tipo de empleo", ["unskilled non-res", "unskilled res", "skilled official", "mgmt/highly qualif"])
-        property_type = f = c5.selectbox("Propiedad", ["real estate", "life insurance", "car/other", "no property"])
+        property_type = c5.selectbox("Propiedad", ["real estate", "life insurance", "car/other", "no property"])
         housing_type = c6.selectbox("Tipo de vivienda", ["rent", "own", "for free"])
 
         other_debtors = c4.selectbox("Otros deudores/Garante", ["none", "co-applicant", "guarantor"])
@@ -429,6 +494,9 @@ elif opcion_menu == "Predicción de Crédito":
         modelo = st.session_state['best_model']
         prediccion = modelo.predict(df_pred_final)[0]
         
+        if st.session_state['best_model_name'] == "Red Neuronal (MLP)":
+            prediccion = int(prediccion > 0.5)
+            
         st.markdown("---")
         if prediccion == 0:
             st.success("✅ **CRÉDITO APROBADO:** El modelo clasifica al cliente como de BAJO RIESGO (Cliente Bueno).")
