@@ -36,10 +36,11 @@ Para garantizar la correcta ejecución del pipeline híbrido, el sistema anfitri
 
 Para evitar conflictos de dependencias en local, se recomienda crear un entorno virtual limpio utilizando el gestor rápido `uv`.
 
-Si no tienes `uv` instalado, puedes instalarlo mediante pip, y luego crear el entorno:
+Si no tienes `uv` instalado, puedes instalarlo mediante pip, luego crear el entorno y activarlo:
 ```bash
 pip install uv
-uv venv --python 3.11
+uv venv --python 3.12
+.venv\Scripts\activate
 ```
 
 ## 📦 Instalación de Dependencias
