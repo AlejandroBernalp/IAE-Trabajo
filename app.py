@@ -223,6 +223,48 @@ if opcion_menu == "Análisis Exploratorio":
             plt.tight_layout()
             sns.despine()
             st.pyplot(fig)
+            
+            # Métricas con reshaping
+            st.markdown("---")
+            st.subheader("📋 Resumen Estadístico mediante Data Reshaping")
+            st.markdown(
+                "Para calcular los estadísticos de forma eficiente, transformamos el dataframe de formato **Wide a Long** "
+                "aislando la variable seleccionada frente al estado del crédito."
+            )
+            
+            # 1. PASO DE WIDE A LONG (Pivotado/Melting)
+            # Seleccionamos únicamente la variable objetivo y la cuantitativa elegida
+            df_wide = df_plot[['class', var_seleccionada]]
+            
+            df_long = pd.melt(
+                df_wide, 
+                id_vars=['class'], 
+                value_vars=[var_seleccionada],
+                var_name='Variable_Numérica', 
+                value_name='Valor'
+            )
+            
+            # Mostramos un pequeño formato expandible para que el tribunal vea el "Long Format" resultante
+            with st.expander("🔍 Ver estructura de datos transformada (Formato Long)"):
+                st.dataframe(df_long.head(6), use_container_width=True)
+            
+            # 2. AGREGACIÓN ESTADÍSTICA (Cálculo de Media, Mediana y Varianza)
+            # Agrupamos por la clase (Good/Bad) y calculamos los estadísticos sobre la columna 'Valor'
+            df_resumen = df_long.groupby('class')['Valor'].agg(
+                Media='mean',
+                Mediana='median',
+                Varianza='var'
+            ).reset_index()
+            
+            # Renombramos la columna de clase para que quede estético
+            df_resumen = df_resumen.rename(columns={'class': 'Estado Crédito'})
+            
+            # Mostrar la tabla final en Streamlit
+            st.dataframe(df_resumen.style.format({
+                'Media': '{:.2f}',
+                'Mediana': '{:.2f}',
+                'Varianza': '{:.2f}'
+            }), use_container_width=True)
 
 # ==========================================
 # PESTAÑA 2: ENTRENAMIENTO DEL MODELO
