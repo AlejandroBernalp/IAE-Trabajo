@@ -1,4 +1,4 @@
-# 📊 Aplicación de Deep Learning para Clasificación de Riesgo Financiero
+# 📊 Aplicación de Machine Learning para clasificación de riesgo financiero
 
 Este proyecto contiene una aplicación interactiva desarrollada en **Streamlit** que integra modelos avanzados de Machine Learning y Deep Learning para la evaluación y clasificación del riesgo de crédito de clientes. 
 
@@ -6,15 +6,15 @@ La plataforma web combina un backend analítico que procesa datos estructurados 
 
 ---
 
-## 🎯 Objetivo del Proyecto
+## 🎯 Objetivo del proyecto
 
-El objetivo principal es construir y desplegar un pipeline robusto e interactivo de extremo a extremo (*End-to-End*) que automatice la ingesta de datos de clientes, realice un análisis exploratorio avanzado y evalúe el riesgo financiero utilizando arquitecturas de redes neuronales y modelos de ensamble. 
+El objetivo principal es construir y desplegar un pipeline robusto e interactivo de extremo a extremo (*End-to-End*) que automatice la ingesta de datos de clientes, realice un análisis exploratorio avanzado y evalúe el riesgo financiero utilizando arquitecturas de redes neuronales y modelos de ML. 
 
 El proyecto destaca por su naturaleza híbrida, utilizando **R** para tareas específicas de extracción y transformación de datos, y **Python** como motor principal para el modelado predictivo y la interfaz de usuario.
 
 ---
 
-## 🧩 Problema que Resuelve la Aplicación
+## 🧩 El problema: Predicción de riesgo crediticio
 
 En el sector financiero, evaluar la concesión de un crédito de forma manual consume una cantidad ingente de tiempo y está sujeto a sesgos humanos. Esta aplicación resuelve el problema mediante la **automatización de la clasificación del riesgo (Clientes *Good* vs. *Bad*)**:
 
@@ -34,10 +34,23 @@ Para garantizar la correcta ejecución del pipeline híbrido, el sistema anfitri
 
 ## 🛠️ Creación del Entorno
 
-Para evitar conflictos de dependencias en local, se recomienda crear un entorno virtual limpio utilizando el gestor rápido `uv` o el módulo nativo `venv`.
+Para evitar conflictos de dependencias en local, se recomienda crear un entorno virtual limpio utilizando el gestor rápido `uv`.
 
-### Opción A: Usando `uv` (Recomendado por su velocidad)
 Si no tienes `uv` instalado, puedes instalarlo mediante pip, y luego crear el entorno:
 ```bash
 pip install uv
 uv venv --python 3.11
+```
+
+## 📦 Instalación de Dependencias
+Una vez activado el entorno, instala los paquetes requeridos.
+```bash
+uv pip install -r requirements.txt
+```
+Con el entorno activo y las depenedencias instaladas, la app se puede lanzar localmente con
+
+```bash
+streamlit run app.py
+```
+
+La aplicación se abrirá automáticamente en tu navegador web predeterminado en la dirección local `http://localhost:8501`.
