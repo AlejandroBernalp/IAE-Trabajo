@@ -36,11 +36,13 @@ def cargar_datos_desde_r():
     dataframe_r = funcion_r()
     
     print("[ETL] Transfiriendo DataFrame nativo de R a Pandas...")
-    # Activamos la conversión global de rpy2 para Pandas (más segura en entornos web hibridos)
+    # Importamos el objeto de conversión seguro de rpy2
+    from rpy2.robjects import conversion
     from rpy2.robjects import pandas2ri
-    pandas2ri.activate()
-    
-    # Convertimos directamente usando el entorno global instanciado
-    df_crudo = robjects.rpy2py(dataframe_r)
+
+    # Creamos un contexto local combinando el convertidor por defecto con el de Pandas
+    with conversion.localconverter(robjects.default_converter + pandas2ri.converter) as cv:
+        # Convertimos el data.frame de R directamente a Pandas
+        df_crudo = conversion.rpy2py(dataframe_r)
         
     return df_crudo
