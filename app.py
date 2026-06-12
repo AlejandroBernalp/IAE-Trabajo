@@ -1,3 +1,10 @@
+
+# --- INICIALIZACIÓN CRÍTICA DE R EN EL HILO PRINCIPAL ---
+import rpy2.robjects as robjects
+# Al ejecutar una instrucción mínima de R aquí, forzamos a que el motor
+# se instancie en el Main Thread antes de que Streamlit empiece a gestionar hilos.
+robjects.r("options(warn = -1)")
+# ---------------------------------------------------------
 import streamlit as st
 import pandas as pd
 import dask.dataframe as dd
